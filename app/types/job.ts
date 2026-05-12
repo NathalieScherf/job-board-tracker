@@ -14,8 +14,8 @@ export interface SavedUrl {
   url: string
   company: string
   addedAt: number
+  lastScannedAt?: number
 }
-
 export interface SavedJob {
   title: string | null
   company: string | null
