@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { JobPosting, JobLink, SavedUrl, SavedJob } from "./types/job";
 import { loadFromStorage, saveToStorage, KEYS } from "./lib/storage";
 import JobLinkCard from "./components/JobLinkCard";
 import SavedJobCard from "./components/SavedJobCard";
 import SavedUrlCard from "./components/SavedUrlCard";
+import UrlInput from "./components/UrlInput";
 
 export default function Home() {
   const [url, setUrl] = useState<string>("");
   const [company, setCompany] = useState<string>("");
   const [links, setLinks] = useState<JobLink[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
+
   const [error, setError] = useState<string | null>(null);
   const [savedUrls, setSavedUrls] = useState<SavedUrl[]>(() =>
     loadFromStorage<SavedUrl[]>(KEYS.savedUrls, []),
@@ -19,8 +22,12 @@ export default function Home() {
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>(() =>
     loadFromStorage<SavedJob[]>(KEYS.savedJobs, []),
   );
-
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
   async function handleScan(scanUrl = url, scanCompany = company) {
+      console.log('scanning:', scanUrl)  // add this
     setLoading(true);
     setError(null);
     setLinks([]);
@@ -132,34 +139,22 @@ export default function Home() {
     <main className="max-w-2xl mx-auto mt-20 p-6 space-y-10">
       <h1 className="text-2xl font-bold">Job Parser</h1>
 
-      <section className="space-y-2">
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste a careers page URL..."
-          className="w-full border rounded p-2 text-sm"
+      {mounted && (
+        <UrlInput
+          url={url}
+          company={company}
+          loading={loading}
+          onUrlChange={setUrl}
+          onCompanyChange={setCompany}
+          onScan={handleScan}
         />
-        <input
-          type="text"
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          placeholder="Company name (optional)..."
-          className="w-full border rounded p-2 text-sm"
-        />
-        <button
-          onClick={() => handleScan()}
-          // disabled={!mounted || loading || url.trim() === ""}
-          className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
-        >
-          {loading ? "Scanning..." : "Scan Page"}
-        </button>
-      </section>
+      )}
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
       {/* Saved URLs */}
-      {savedUrls.length > 0 && (<section>
+      {mounted && savedUrls.length > 0 && (
+        <section>
           <h2 className="text-lg font-semibold mb-3">Saved Job Pages</h2>
           <div className="space-y-2">
             {savedUrls.map((saved) => (
@@ -195,7 +190,7 @@ export default function Home() {
       )}
 
       {/* Saved Jobs */}
-      {savedJobs.length > 0 && (
+      {mounted && savedJobs.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold mb-3">Saved Jobs</h2>
           <div className="space-y-3">
