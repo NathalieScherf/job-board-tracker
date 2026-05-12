@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { JobPosting, JobLink, SavedUrl, SavedJob } from "./types/job";
 import { loadFromStorage, saveToStorage, KEYS } from "./lib/storage";
+import JobLinkCard from "./components/JobLinkCard";
+import SavedJobCard from "./components/SavedJobCard";
+import SavedUrlCard from "./components/SavedUrlCard";
 
 export default function Home() {
   const [url, setUrl] = useState<string>("");
@@ -10,20 +13,18 @@ export default function Home() {
   const [links, setLinks] = useState<JobLink[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  // const [mounted, setMounted] = useState<boolean>(false);
-  const [savedUrls, setSavedUrls] = useState<SavedUrl[]> (() => loadFromStorage<SavedUrl[]>(KEYS.savedUrls, []));
-  const [savedJobs, setSavedJobs] = useState<SavedJob[]>(() => loadFromStorage<SavedJob[]>(KEYS.savedJobs, []));
-
-  // useEffect(() => {
-    // setMounted(true);
-    // setSavedUrls();
-    // setSavedJobs();
-  // }, []);
+  const [savedUrls, setSavedUrls] = useState<SavedUrl[]>(() =>
+    loadFromStorage<SavedUrl[]>(KEYS.savedUrls, []),
+  );
+  const [savedJobs, setSavedJobs] = useState<SavedJob[]>(() =>
+    loadFromStorage<SavedJob[]>(KEYS.savedJobs, []),
+  );
 
   async function handleScan(scanUrl = url, scanCompany = company) {
     setLoading(true);
     setError(null);
     setLinks([]);
+    setCompany(scanCompany);
 
     try {
       const response = await fetch("/api/scan-links", {
@@ -35,17 +36,14 @@ export default function Home() {
       const data: JobLink[] = await response.json();
       setLinks(data);
 
-      // Save URL if not already saved
       const already = savedUrls.find((s) => s.url === scanUrl);
       if (already) {
-        // Update lastScannedAt on existing entry
         const updated = savedUrls.map((s) =>
           s.url === scanUrl ? { ...s, lastScannedAt: Date.now() } : s,
         );
         setSavedUrls(updated);
         saveToStorage<SavedUrl[]>(KEYS.savedUrls, updated);
       } else if (scanCompany) {
-        // Add new entry
         const newEntry: SavedUrl = {
           url: scanUrl,
           company: scanCompany,
@@ -89,18 +87,6 @@ export default function Home() {
             ? data.company
             : company || null,
       };
-
-      const savedJob: SavedJob = {
-        ...enriched,
-        savedAt: Date.now(),
-      };
-      const updatedJobs = [
-        savedJob,
-        ...savedJobs.filter((j) => j.url !== jobUrl),
-      ];
-      setSavedJobs(updatedJobs);
-      saveToStorage<SavedJob[]>(KEYS.savedJobs, updatedJobs);
-
       setLinks((prev) =>
         prev.map((link) =>
           link.url === jobUrl
@@ -115,6 +101,19 @@ export default function Home() {
         ),
       );
     }
+  }
+
+  function handleSaveJob(job: JobPosting) {
+    const savedJob: SavedJob = {
+      ...job,
+      savedAt: Date.now(),
+    };
+    const updatedJobs = [
+      savedJob,
+      ...savedJobs.filter((j) => j.url !== job.url),
+    ];
+    setSavedJobs(updatedJobs);
+    saveToStorage<SavedJob[]>(KEYS.savedJobs, updatedJobs);
   }
 
   function handleDeleteUrl(urlToDelete: string) {
@@ -160,40 +159,16 @@ export default function Home() {
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
       {/* Saved URLs */}
-      {savedUrls.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold mb-3">Saved Pages</h2>
+      {savedUrls.length > 0 && (<section>
+          <h2 className="text-lg font-semibold mb-3">Saved Job Pages</h2>
           <div className="space-y-2">
             {savedUrls.map((saved) => (
-              <div
+              <SavedUrlCard
                 key={saved.url}
-                className="border rounded p-3 flex items-center justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-sm">{saved.company}</p>
-                  <p className="text-xs text-gray-400 truncate">{saved.url}</p>
-                  {saved.lastScannedAt && (
-                    <p className="text-xs text-gray-400">
-                      Last scanned:{" "}
-                      {new Date(saved.lastScannedAt).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleScan(saved.url, saved.company)}
-                    className="text-xs bg-black text-white px-3 py-1 rounded"
-                  >
-                    Scan
-                  </button>
-                  <button
-                    onClick={() => handleDeleteUrl(saved.url)}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+                saved={saved}
+                onScan={handleScan}
+                onDelete={handleDeleteUrl}
+              />
             ))}
           </div>
         </section>
@@ -207,36 +182,13 @@ export default function Home() {
           </h2>
           <div className="space-y-3">
             {links.map((link) => (
-              <div key={link.url} className="border rounded p-4 space-y-2">
-                <p className="font-medium text-sm">{link.label}</p>
-                <p className="text-xs text-gray-400 truncate">{link.url}</p>
-                {link.parsed ? (
-                  <div className="mt-2 space-y-1 text-sm">
-                    <p>
-                      <span className="font-semibold">Title:</span>{" "}
-                      {link.parsed.title ?? "Not found"}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Company:</span>{" "}
-                      {link.parsed.company ?? "Not found"}
-                    </p>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      className="text-blue-500 underline text-xs"
-                    >
-                      View posting
-                    </a>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleParse(link.url)}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded"
-                  >
-                    {link.parsing ? "Parsing..." : "Parse"}
-                  </button>
-                )}
-              </div>
+              <JobLinkCard
+                key={link.url}
+                link={link}
+                isSaved={savedJobs.some((j) => j.url === link.url)}
+                onParse={handleParse}
+                onSave={handleSaveJob}
+              />
             ))}
           </div>
         </section>
@@ -248,34 +200,11 @@ export default function Home() {
           <h2 className="text-lg font-semibold mb-3">Saved Jobs</h2>
           <div className="space-y-3">
             {savedJobs.map((job) => (
-              <div
+              <SavedJobCard
                 key={job.url}
-                className="border rounded p-4 space-y-1 text-sm"
-              >
-                <p>
-                  <span className="font-semibold">Title:</span>{" "}
-                  {job.title ?? "Not found"}
-                </p>
-                <p>
-                  <span className="font-semibold">Company:</span>{" "}
-                  {job.company ?? "Not found"}
-                </p>
-                <div className="flex items-center gap-3 pt-1">
-                  <a
-                    href={job.url}
-                    target="_blank"
-                    className="text-blue-500 underline text-xs"
-                  >
-                    View posting
-                  </a>
-                  <button
-                    onClick={() => handleDeleteJob(job.url)}
-                    className="text-xs text-red-400 hover:text-red-600"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
+                job={job}
+                onDelete={handleDeleteJob}
+              />
             ))}
           </div>
         </section>
